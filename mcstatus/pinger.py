@@ -38,17 +38,22 @@ if TYPE_CHECKING:
 
     RawResponseDescription: TypeAlias = "RawResponseDescriptionWhenDict | list[RawResponseDescriptionWhenDict] | str"
 
+    class RawResponseWorld(TypedDict):
+        datetime: str
+
     class RawResponse(TypedDict):
         description: RawResponseDescription
         players: RawResponsePlayers
         version: RawResponseVersion
         favicon: NotRequired[str]
+        world: NotRequired[RawResponseWorld]
 
 else:
     RawResponsePlayer = dict
     RawResponsePlayers = dict
     RawResponseVersion = dict
     RawResponseDescriptionWhenDict = dict
+    RawResponseWorld = dict
     RawResponse = dict
 
 
@@ -266,10 +271,24 @@ class PingResponse:
                 raise ValueError(f"Invalid version object (expected 'protocol' to be int, was {type(raw['protocol'])})")
             self.protocol = raw["protocol"]
 
+    class World:
+        datetime: str
+
+        def __init__(self, raw: RawResponseWorld):
+            if not isinstance(raw, dict):
+                raise ValueError(f"Invalid world object (expected dict, found {type(raw)})")
+
+            if "datetime" not in raw:
+                raise ValueError("Invalid world object (no 'datetime' value)")
+            if not isinstance(raw["datetime"], str):
+                raise ValueError(f"Invalid world object (expected 'datetime' to be str, was {type(raw['datetime'])})")
+            self.datetime = raw["datetime"]
+
     players: Players
     version: Version
     description: str
     favicon: str | None
+    world: World | None
     latency: float
 
     def __init__(self, raw: RawResponse, latency: float = 0):
@@ -289,6 +308,11 @@ class PingResponse:
         self.description = self._parse_description(raw["description"])
 
         self.favicon = raw.get("favicon")
+
+        if "world" in raw:
+            self.world = PingResponse.World(raw["world"])
+        else:
+            self.world = None
 
     @staticmethod
     def _parse_description(raw_description: RawResponseDescription) -> str:
