@@ -36,6 +36,9 @@ if TYPE_CHECKING:
         obfuscated: bool
 
     RawJavaResponseMotd: TypeAlias = "RawJavaResponseMotdWhenDict | list[RawJavaResponseMotdWhenDict | str] | str"
+    
+    class RawResponseWorld(TypedDict):
+        datetime: str
 
     class RawJavaResponse(TypedDict):
         description: RawJavaResponseMotd
@@ -44,6 +47,7 @@ if TYPE_CHECKING:
         favicon: NotRequired[str]
         forgeData: NotRequired[RawForgeData]
         modinfo: NotRequired[RawForgeData]
+        world: NotRequired[RawResponseWorld]
         enforcesSecureChat: NotRequired[bool]
 
 else:
@@ -51,6 +55,7 @@ else:
     RawJavaResponsePlayers = dict
     RawJavaResponseVersion = dict
     RawJavaResponseMotdWhenDict = dict
+    RawResponseWorld = dict
     RawJavaResponse = dict
 
 from mcstatus.utils import deprecated
@@ -101,6 +106,21 @@ class BaseStatusResponse(ABC):
         """
         raise NotImplementedError("You can't use abstract methods.")
 
+@dataclass(frozen=True)
+class World:
+    datetime: str
+
+    @classmethod
+    def build(cls, raw: RawResponseWorld) -> Self | None:
+        if not isinstance(raw, dict):
+            raise ValueError(f"Invalid world object (expected dict, found {type(raw)})")
+
+        if "datetime" not in raw:
+            raise ValueError("Invalid world object (no 'datetime' value)")
+        if not isinstance(raw.get("datetime"), str):
+            raise ValueError(f"Invalid world object (expected 'datetime' to be str, was {type(raw['datetime'])})")
+        
+        return cls(datetime=raw["datetime"])
 
 @dataclass(frozen=True)
 class JavaStatusResponse(BaseStatusResponse):
@@ -129,6 +149,7 @@ class JavaStatusResponse(BaseStatusResponse):
     """
     forge_data: ForgeData | None
     """Forge mod data (mod list, channels, etc). Only present if this is a forge (modded) server."""
+    world: World | None
 
     @classmethod
     def build(cls, raw: RawJavaResponse, latency: float = 0) -> Self:
@@ -147,6 +168,12 @@ class JavaStatusResponse(BaseStatusResponse):
             raw_forge = raw.get("forgeData") or raw.get("modinfo")
             assert raw_forge is not None
             forge_data = ForgeData.build(raw_forge)
+        
+        world: World | None = None
+        if "world" in raw:
+            world = raw.get("world")
+            assert world is not None
+            world = World.build(world)
 
         return cls(
             raw=raw,
@@ -157,6 +184,7 @@ class JavaStatusResponse(BaseStatusResponse):
             icon=raw.get("favicon"),
             latency=latency,
             forge_data=forge_data,
+            world=world,
         )
 
 
